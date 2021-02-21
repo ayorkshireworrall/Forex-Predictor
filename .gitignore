@@ -2,4 +2,5 @@
 .vscode/**
 **.pyc
 models/**
+example_markup.md
 data/**
