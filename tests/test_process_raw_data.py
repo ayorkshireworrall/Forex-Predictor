@@ -1,11 +1,24 @@
+from decimal import Decimal
 import unittest
 import pandas as pd
+import numpy as np
 from datetime import datetime, timedelta
 from unittest.mock import patch
-from forex_predictor.process_raw_data import find_start_date_index, get_dataframe_from_dates, get_dates, get_market, get_relevant_data, set_intervals, set_const_intervals, set_market, set_target_interval, get_intervals, get_target_interval, apply_category_label, load_market_csv
+from forex_predictor.process_raw_data import create_relevant_data_row, create_row, find_start_date_index, get_dataframe_from_dates, get_dates, get_market, get_max_input_minutes_missing, get_relevant_data, process_input_data, set_intervals, set_const_intervals, set_market, set_max_input_minutes_missing, set_target_interval, get_intervals, get_target_interval, apply_category_label, load_market_csv
 
 
 class Test_Process_Raw_Data(unittest.TestCase):
+
+    def test_convert_datestring_array_to_datetime(self):
+        datestrings = ['2020-01-01 00:00:00', '2020-01-02 00:00:00', '2020-01-01 03:00:00']
+        expected_datetimes = [datetime.strptime('2020-01-01 00:00:00', '%Y-%m-%d %H:%M:%S'), datetime.strptime('2020-01-02 00:00:00', '%Y-%m-%d %H:%M:%S'), datetime.strptime('2020-01-01 03:00:00', '%Y-%m-%d %H:%M:%S')]
+        self.assertEqual(expected_datetimes, convert_datestring_array_to_datetime(datestrings))
+
+    def test_create_expected_row(self):
+        input_row = [5,4,3,2,1]
+        expected_row = np.array([[1,2,3,4,1]])
+        actual_row = create_expected_row(input_row, 1)
+        self.assertTrue(np.array_equal(expected_row, actual_row))
 
     def test_set_intervals(self):
         intervals = [5, 5, 5]
@@ -21,6 +34,11 @@ class Test_Process_Raw_Data(unittest.TestCase):
         expected_intervals = [3, 3, 3, 3, 3]
         set_const_intervals(3, 5)
         self.assertEqual(expected_intervals, get_intervals())
+
+    def test_set_max_input_minutes_missing(self):
+        minutes = 69
+        set_max_input_minutes_missing(minutes)
+        self.assertEqual(minutes, get_max_input_minutes_missing())
 
     def test_set_market(self):
         market = 'GBP/JPY'
@@ -77,6 +95,44 @@ class Test_Process_Raw_Data(unittest.TestCase):
         expected_index = 1994
         self.assertEqual(expected_index, actual_index)
 
+    def test_process_input_data(self):
+        set_intervals([5, 5, 5])
+        df = pd.read_csv('tests/resources/dataframe_data.csv').iloc[1998:2013, :]
+        test_data = {
+            'datetime': ['2014-07-18 08:49:00', '2014-07-18 08:54:00', '2014-07-18 08:59:00'],
+            'open': [0.79227, 0.79223, 0.79315],
+            'high': [0.79231, 0.79312, 0.79325],
+            'low': [0.79216, 0.79219, 0.79279],
+            'close': [0.79222, 0.79312, 0.79284]
+        }
+        expected_input_data = pd.DataFrame(data=test_data)
+        actual_input_data = process_input_data(df)
+        self.assertTrue(expected_input_data.equals(actual_input_data))
+
+    def test_create_row(self):
+        set_intervals([5,5,5])
+        test_data = {
+            'datetime': ['2014-07-18 08:49:00', '2014-07-18 08:54:00', '2014-07-18 08:59:00'],
+            'open': [0.79227, 0.79223, 0.79315],
+            'high': [0.79231, 0.79312, 0.79325],
+            'low': [0.79216, 0.79219, 0.79279],
+            'close': [0.79222, 0.79312, 0.79284]
+        }
+        input_values = pd.DataFrame(data=test_data)
+        expected_row = create_expected_row([0.79227, 0.79231, 0.79216, 0.79222, 0.79223, 0.79312, 0.79219, 0.79312, 0.79315, 0.79325, 0.79279, 0.79284], 1)
+        actual_row = create_row(input_values, 1)
+        self.assertTrue(np.array_equal(expected_row, actual_row))
+
+    def test_create_relevant_data_row(self):
+        set_intervals([5,5,5])
+        set_target_interval(timedelta(minutes=5))
+        df = pd.read_csv('tests/resources/dataframe_data.csv').iloc[1998:2018, :]
+        expected_row = create_expected_row([0.79227, 0.79231, 0.79216, 0.79222, 0.79223, 0.79312, 0.79219, 0.79312, 0.79315, 0.79325, 0.79279, 0.79284], 0)
+        actual_row = create_relevant_data_row(df, datetime.strptime('2014-07-18 09:04:00', '%Y-%m-%d %H:%M:%S'))
+        self.assertTrue(np.array_equal(expected_row, actual_row))
+        
+
+
 def convert_datestring_array_to_datetime(datestrings):
     """For readability when working with large amounts of datetimes
     """
@@ -84,3 +140,14 @@ def convert_datestring_array_to_datetime(datestrings):
     for datestring in datestrings:
         datetimes.append(datetime.strptime(datestring, '%Y-%m-%d %H:%M:%S'))
     return datetimes
+
+def create_expected_row(input_row, output_category):
+    """Create a row similar to how it is done in process_raw_data.py but with the advantage that this takes inputs as a python list 
+        making it much easier to test. Can then use it in more integrated test with expected dataframe values
+    """
+    values = np.array([input_row])
+    start_value = values[0][0]
+    values = values[:, 1:]
+    for i in range(0, len(values[0])):
+        values[0][i] = Decimal(str(start_value)) - Decimal(str(values[0][i]))
+    return np.hstack((values, [[output_category]]))

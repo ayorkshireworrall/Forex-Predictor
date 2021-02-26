@@ -1,5 +1,7 @@
+import numpy as np
 import pandas as pd
 from datetime import timedelta, datetime
+from decimal import Decimal
 from tqdm import tqdm
 from utils.timer_utils import Timer
 
@@ -12,6 +14,7 @@ from utils.timer_utils import Timer
 intervals = [] #input ohlc data periods to create, working from right to left decides how far from the target date
 target_interval = timedelta(minutes=60) #The size of the target interval (for buying/selling)
 market = 'EUR/GBP'
+max_input_minutes_missing = 0
 
 #setters
 def set_intervals(interval_array):
@@ -30,6 +33,10 @@ def set_market(new_market):
     global market
     market = new_market
 
+def set_max_input_minutes_missing(minutes):
+    global max_input_minutes_missing
+    max_input_minutes_missing = minutes
+
 #getters(mainly for tests)
 def get_intervals():
     global intervals
@@ -43,6 +50,10 @@ def get_market():
     global market
     return market
 
+def get_max_input_minutes_missing():
+    global max_input_minutes_missing
+    return max_input_minutes_missing 
+
 #----------------------------------process raw data from csv---------------------------------------------
 
 def apply_category_label(open, close):
@@ -55,7 +66,7 @@ def load_market_csv(market):
     market = market.replace('/', '_')
     return pd.read_csv(f'data/{market}.csv')
 
-def apply_category_label_for_date(dataframe, datetime):
+def apply_category_label_for_dataframe(df):
     open = df.iloc[0]['open']
     close = df.iloc[-1]['close']
     return apply_category_label(open, close)
@@ -96,7 +107,7 @@ def create_data(dates, df_width):
         start_index = find_start_date_index(dataframe, start) - sum(intervals)
         smaller_df = dataframe.iloc[start_index: start_index + df_width, :]
         training_dates = get_dates(training_start, validation_start, test_start, test_end)[0]
-        dataframes = []
+        rows = []
         iteration_count = 0
         for date in tqdm(training_dates):
             if iteration_count * sum(intervals) > df_width:
@@ -105,12 +116,17 @@ def create_data(dates, df_width):
                 start_index -= sum(intervals)
                 smaller_df = dataframe.iloc[start_index: end_index, :]
                 iteration_count = 0
-            new_df = get_relevant_data(smaller_df, date)
-            if not new_df.empty:
-                dataframes.append(get_relevant_data(smaller_df, date))
+                write_data_file(rows)
+                rows = []
+            relevant_df = get_relevant_data(smaller_df, date)
+            if not relevant_df.empty:
+                try:
+                    rows.append(create_relevant_data_row(relevant_df, date))
+                except:
+                    pass
             iteration_count += 1
+        write_data_file(rows)
     print(f'Time taken: {T._context_timed}')
-    return dataframes
 
 def get_dataframe_from_dates(start_date, end_date, dataframe):
     """Generates a subset from a dataframe between two dates. Because it compares multiple string matching values 
@@ -140,7 +156,7 @@ def find_start_date_index(dataframe, target_date):
         error (int): the amount of minutes before the target data that will be considered
 
     Returns:
-        [int]: target item dataframe
+        [pandas.DataFrame]: target item dataframe
     """
     earliest_date = target_date - timedelta(minutes=1000)
     acceptable_dates_df = get_dataframe_from_dates(earliest_date, target_date, dataframe)
@@ -163,9 +179,81 @@ def get_relevant_data(dataframe, target_date):
     end_date = target_date + target_interval
     return get_dataframe_from_dates(start_date, end_date, dataframe)
 
+def create_relevant_data_row(dataframe, target_date):
+    """Transform data points into a row with inputs and one output for consumption by the machine
+
+    Args:
+        dataframe (pandas.dataframe): the selected datapoints for the given date
+        target_date (datetime.datetime): the datetime for which we're creating data for
+
+    Returns:
+       numpy.array : a row of data that can be consumed by a model
+    """
+    start_date = target_date - timedelta(minutes=sum(intervals))
+    end_date = target_date + target_interval
+    input_df = get_dataframe_from_dates(start_date, target_date, dataframe)
+    output_df = get_dataframe_from_dates(target_date, end_date, dataframe)
+    processed_inputs = process_input_data(input_df)
+    output_category = apply_category_label_for_dataframe(output_df)
+    return create_row(processed_inputs, output_category)
+
+def process_input_data(dataframe):
+    """converts minute by minute OHLC data into OHLC data for the global intervals
+
+    Args:
+        dataframe (pandas.DataFrame): the input OHLC data points in a dataframe
+
+    Raises:
+        RuntimeError: when there are not enough data points
+
+    Returns:
+        pandas.DataFrame: reduced DataFrame
+    """
+    if dataframe.shape[0] < sum(intervals) - max_input_minutes_missing:
+        raise RuntimeError('Insufficient data to process for this number of intervals')
+
+    micro_frames = []
+    i = 0
+    for interval in intervals:
+        micro_frames.append(dataframe[i:(i + interval)])
+        i = i + interval
+    processed_rows = []
+    for micro_frame in micro_frames:
+        date = micro_frame.iloc[0]['datetime']
+        open_price = micro_frame.iloc[0]['open']
+        high = micro_frame['high'].max()
+        low = micro_frame['low'].min()
+        close_price = micro_frame.iloc[-1]['close']
+        appendable = {'datetime':date, 'open':open_price, 'high':high, 'low':low, 'close':close_price}
+        processed_rows.append(appendable)
+    return pd.DataFrame(processed_rows) 
+
+def create_row(input_values, output_category):
+    """Converts input dataframe and the corresponding output category into a numpy array
+
+    Args:
+        input_values (pandas.DataFrame): the processed OHLC data (to match global intervals)
+        output_category (int): output category
+
+    Returns:
+        numpy.array: a data row that can be consumed by a machine learning model
+    """
+    values = input_values.iloc[:, 1:].values
+    values = values.flatten()
+    values = values.reshape(1, len(values))
+    values = values[:, :len(intervals)*4]
+    start_value = values[0][0]
+    values = values[:, 1:]
+    for i in range(0, len(values[0])):
+        values[0][i] = Decimal(str(start_value)) - Decimal(str(values[0][i]))
+    return np.hstack((values, [[output_category]]))
+
+def write_data_file(rows):
+    pass
+
 # set_intervals([15,15,15,15])
 # start = datetime.strptime('2014-05-22 09:55:00', '%Y-%m-%d %H:%M:%S')
-# end = datetime.strptime('2014-07-22 12:59:00', '%Y-%m-%d %H:%M:%S')
+# end = datetime.strptime('2014-06-22 12:59:00', '%Y-%m-%d %H:%M:%S')
 # dates = [start, end, end, end]
 # all_dataframes = create_data(dates, 25000)
 # print('finished')
