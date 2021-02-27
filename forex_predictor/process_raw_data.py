@@ -180,7 +180,7 @@ def get_relevant_data(dataframe, target_date):
     return get_dataframe_from_dates(start_date, end_date, dataframe)
 
 def create_relevant_data_row(dataframe, target_date):
-    """Transform data points into a row with inputs and one output for consumption by the machine
+    """Transform data points into a row with inputs based on the intervals and the open and low price for the given date
 
     Args:
         dataframe (pandas.dataframe): the selected datapoints for the given date
@@ -190,12 +190,29 @@ def create_relevant_data_row(dataframe, target_date):
        numpy.array : a row of data that can be consumed by a model
     """
     start_date = target_date - timedelta(minutes=sum(intervals))
-    end_date = target_date + target_interval
     input_df = get_dataframe_from_dates(start_date, target_date, dataframe)
-    output_df = get_dataframe_from_dates(target_date, end_date, dataframe)
     processed_inputs = process_input_data(input_df)
-    output_category = apply_category_label_for_dataframe(output_df)
-    return create_row(processed_inputs, output_category)
+    outputs = get_open_and_close_for_period(dataframe, target_date)
+    return create_row(processed_inputs, outputs)
+
+def get_open_and_close_for_period(dataframe, target_date):
+    """Locate the open price and close price for the target date given the global interval
+
+    Args:
+        dataframe (pandas.DataFrame): The raw data to search from
+        target_date (datetime.datetime): The start time of the period
+
+    Returns:
+        list(int, int): open and close prices
+    """
+    end_date = target_date + target_interval - timedelta(minutes=1) #necessary for actual open / close
+    open_row = dataframe.loc[dataframe['datetime'] == datetime.strftime(target_date, '%Y-%m-%d %H:%M:%S')]
+    close_row = dataframe.loc[dataframe['datetime'] == datetime.strftime(end_date, '%Y-%m-%d %H:%M:%S')]
+    if open_row.empty or close_row.empty:
+        raise RuntimeError(f'Open-close data unavailable for {target_date} and interval of {int(target_interval.total_seconds()//60)} minutes')
+    open = open_row.iloc[0]['open']
+    close = close_row.iloc[0]['close']
+    return open, close
 
 def process_input_data(dataframe):
     """converts minute by minute OHLC data into OHLC data for the global intervals
@@ -228,7 +245,7 @@ def process_input_data(dataframe):
         processed_rows.append(appendable)
     return pd.DataFrame(processed_rows) 
 
-def create_row(input_values, output_category):
+def create_row(input_values, outputs):
     """Converts input dataframe and the corresponding output category into a numpy array
 
     Args:
@@ -246,7 +263,7 @@ def create_row(input_values, output_category):
     values = values[:, 1:]
     for i in range(0, len(values[0])):
         values[0][i] = Decimal(str(start_value)) - Decimal(str(values[0][i]))
-    return np.hstack((values, [[output_category]]))
+    return np.hstack((values, [outputs]))
 
 def write_data_file(rows):
     pass

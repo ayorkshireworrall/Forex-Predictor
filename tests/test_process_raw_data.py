@@ -1,14 +1,15 @@
 from decimal import Decimal
-import unittest
+import unittest, sys
 import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
 from unittest.mock import patch
-from forex_predictor.process_raw_data import create_relevant_data_row, create_row, find_start_date_index, get_dataframe_from_dates, get_dates, get_market, get_max_input_minutes_missing, get_relevant_data, process_input_data, set_intervals, set_const_intervals, set_market, set_max_input_minutes_missing, set_target_interval, get_intervals, get_target_interval, apply_category_label, load_market_csv
+from forex_predictor.process_raw_data import create_relevant_data_row, create_row, find_start_date_index, get_dataframe_from_dates, get_dates, get_market, get_max_input_minutes_missing, get_open_and_close_for_period, get_relevant_data, process_input_data, set_intervals, set_const_intervals, set_market, set_max_input_minutes_missing, set_target_interval, get_intervals, get_target_interval, apply_category_label, load_market_csv
 
 
 class Test_Process_Raw_Data(unittest.TestCase):
 
+    #Test helper methods
     def test_convert_datestring_array_to_datetime(self):
         datestrings = ['2020-01-01 00:00:00', '2020-01-02 00:00:00', '2020-01-01 03:00:00']
         expected_datetimes = [datetime.strptime('2020-01-01 00:00:00', '%Y-%m-%d %H:%M:%S'), datetime.strptime('2020-01-02 00:00:00', '%Y-%m-%d %H:%M:%S'), datetime.strptime('2020-01-01 03:00:00', '%Y-%m-%d %H:%M:%S')]
@@ -16,10 +17,11 @@ class Test_Process_Raw_Data(unittest.TestCase):
 
     def test_create_expected_row(self):
         input_row = [5,4,3,2,1]
-        expected_row = np.array([[1,2,3,4,1]])
-        actual_row = create_expected_row(input_row, 1)
+        expected_row = np.array([[1,2,3,4,1,2]])
+        actual_row = create_expected_row(input_row, [1,2])
         self.assertTrue(np.array_equal(expected_row, actual_row))
 
+    #Test process_raw_data methods
     def test_set_intervals(self):
         intervals = [5, 5, 5]
         set_intervals(intervals)
@@ -109,6 +111,17 @@ class Test_Process_Raw_Data(unittest.TestCase):
         actual_input_data = process_input_data(df)
         self.assertTrue(expected_input_data.equals(actual_input_data))
 
+    def test_process_input_data_error(self):
+        set_intervals([5, 5, 5, 60])
+        df = pd.read_csv('tests/resources/dataframe_data.csv').iloc[1998:2013, :]
+        expected_error_message = 'Insufficient data to process for this number of intervals'
+        try:
+            actual_input_data = process_input_data(df)
+        except:
+            exc_type, exc_value, exc_traceback = sys.exc_info() 
+        self.assertEqual(expected_error_message, str(exc_value))
+
+
     def test_create_row(self):
         set_intervals([5,5,5])
         test_data = {
@@ -119,17 +132,38 @@ class Test_Process_Raw_Data(unittest.TestCase):
             'close': [0.79222, 0.79312, 0.79284]
         }
         input_values = pd.DataFrame(data=test_data)
-        expected_row = create_expected_row([0.79227, 0.79231, 0.79216, 0.79222, 0.79223, 0.79312, 0.79219, 0.79312, 0.79315, 0.79325, 0.79279, 0.79284], 1)
-        actual_row = create_row(input_values, 1)
+        expected_row = create_expected_row([0.79227, 0.79231, 0.79216, 0.79222, 0.79223, 0.79312, 0.79219, 0.79312, 0.79315, 0.79325, 0.79279, 0.79284], [1, 2])
+        actual_row = create_row(input_values, [1,2])
         self.assertTrue(np.array_equal(expected_row, actual_row))
 
     def test_create_relevant_data_row(self):
         set_intervals([5,5,5])
         set_target_interval(timedelta(minutes=5))
         df = pd.read_csv('tests/resources/dataframe_data.csv').iloc[1998:2018, :]
-        expected_row = create_expected_row([0.79227, 0.79231, 0.79216, 0.79222, 0.79223, 0.79312, 0.79219, 0.79312, 0.79315, 0.79325, 0.79279, 0.79284], 0)
+        expected_row = create_expected_row([0.79227, 0.79231, 0.79216, 0.79222, 0.79223, 0.79312, 0.79219, 0.79312, 0.79315, 0.79325, 0.79279, 0.79284], [0.79283, 0.79258])
         actual_row = create_relevant_data_row(df, datetime.strptime('2014-07-18 09:04:00', '%Y-%m-%d %H:%M:%S'))
         self.assertTrue(np.array_equal(expected_row, actual_row))
+
+    def test_get_open_and_close_for_period(self):
+        set_target_interval(timedelta(minutes=60))
+        df = pd.read_csv('tests/resources/dataframe_data.csv') 
+        start_date = datetime.strptime('2014-07-21 18:00:00', '%Y-%m-%d %H:%M:%S')
+        open, close = get_open_and_close_for_period(df, start_date)
+        self.assertEqual(0.79194, open)
+        self.assertEqual(0.79193, close)
+
+    def test_get_open_and_close_for_period_error(self):
+        set_target_interval(timedelta(minutes=60))
+        df = pd.read_csv('tests/resources/dataframe_data.csv') 
+        start_date = datetime.strptime('2014-07-21 19:00:00', '%Y-%m-%d %H:%M:%S')
+        expected_error_message = 'Open-close data unavailable for 2014-07-21 19:00:00 and interval of 60 minutes'
+        try:
+            open, close = get_open_and_close_for_period(df, start_date)
+        except:
+            exc_type, exc_value, exc_traceback = sys.exc_info()
+        self.assertEqual(expected_error_message, str(exc_value))
+
+        
         
 
 
@@ -141,7 +175,7 @@ def convert_datestring_array_to_datetime(datestrings):
         datetimes.append(datetime.strptime(datestring, '%Y-%m-%d %H:%M:%S'))
     return datetimes
 
-def create_expected_row(input_row, output_category):
+def create_expected_row(input_row, outputs):
     """Create a row similar to how it is done in process_raw_data.py but with the advantage that this takes inputs as a python list 
         making it much easier to test. Can then use it in more integrated test with expected dataframe values
     """
@@ -150,4 +184,4 @@ def create_expected_row(input_row, output_category):
     values = values[:, 1:]
     for i in range(0, len(values[0])):
         values[0][i] = Decimal(str(start_value)) - Decimal(str(values[0][i]))
-    return np.hstack((values, [[output_category]]))
+    return np.hstack((values, [outputs]))
