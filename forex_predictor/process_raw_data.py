@@ -4,6 +4,7 @@ from datetime import timedelta, datetime
 from decimal import Decimal
 from tqdm import tqdm
 from utils.timer_utils import Timer
+from utils.file_utils import write_data_file
 
 #Aim is to conert open-high-low-close (ohlc) data into inputs and output categories for training a model
 #Categories will be sell (0) and buy(1)
@@ -15,6 +16,7 @@ intervals = [] #input ohlc data periods to create, working from right to left de
 target_interval = timedelta(minutes=60) #The size of the target interval (for buying/selling)
 market = 'EUR/GBP'
 max_input_minutes_missing = 0
+name = 'test'
 
 #setters
 def set_intervals(interval_array):
@@ -37,6 +39,10 @@ def set_max_input_minutes_missing(minutes):
     global max_input_minutes_missing
     max_input_minutes_missing = minutes
 
+def set_name(new_name):
+    global name
+    name = new_name
+
 #getters(mainly for tests)
 def get_intervals():
     global intervals
@@ -53,6 +59,10 @@ def get_market():
 def get_max_input_minutes_missing():
     global max_input_minutes_missing
     return max_input_minutes_missing 
+
+def get_name():
+    global name
+    return name
 
 #----------------------------------process raw data from csv---------------------------------------------
 
@@ -111,21 +121,24 @@ def create_data(dates, df_width):
         iteration_count = 0
         for date in tqdm(training_dates):
             if iteration_count * sum(intervals) > df_width:
+                write_data_file('training', f'models/{name}/data', rows)
                 start_index = find_start_date_index(dataframe, date)
                 end_index = int(start_index + (target_interval.total_seconds()//60)) + df_width
                 start_index -= sum(intervals)
                 smaller_df = dataframe.iloc[start_index: end_index, :]
                 iteration_count = 0
-                write_data_file(rows)
                 rows = []
             relevant_df = get_relevant_data(smaller_df, date)
             if not relevant_df.empty:
                 try:
-                    rows.append(create_relevant_data_row(relevant_df, date))
+                    relevant_data = create_relevant_data_row(relevant_df, date)
+                    datestring = datetime.strftime(date, '%Y-%m-%d %H:%M:%S')
+                    row = np.hstack(([[datestring]], relevant_data)).flatten().astype(str)
+                    rows.append(row)
                 except:
                     pass
             iteration_count += 1
-        write_data_file(rows)
+        write_data_file('training', f'models/{name}/data', rows)
     print(f'Time taken: {T._context_timed}')
 
 def get_dataframe_from_dates(start_date, end_date, dataframe):
