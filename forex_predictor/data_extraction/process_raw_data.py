@@ -15,8 +15,9 @@ from utils.file_utils import write_data_file
 intervals = [] #input ohlc data periods to create, working from right to left decides how far from the target date
 target_interval = timedelta(minutes=60) #The size of the target interval (for buying/selling)
 market = 'EUR/GBP'
-max_input_minutes_missing = 0
+max_input_minutes_missing = 0 #allowance for missing data points from inputs
 name = 'test'
+df_width = 25000 #the size of the market data subset for batch processing
 
 #setters
 def set_intervals(interval_array):
@@ -43,6 +44,10 @@ def set_name(new_name):
     global name
     name = new_name
 
+def set_df_width(width):
+    global df_width
+    df_width = width
+
 #getters(mainly for tests)
 def get_intervals():
     global intervals
@@ -64,6 +69,10 @@ def get_name():
     global name
     return name
 
+def get_df_width():
+    global df_width
+    return df_width
+
 #----------------------------------process raw data from csv---------------------------------------------
 
 def apply_category_label(open, close):
@@ -79,6 +88,10 @@ def load_market_csv(market):
 def apply_category_label_for_dataframe(df):
     open = df.iloc[0]['open']
     close = df.iloc[-1]['close']
+    return apply_category_label(open, close)
+
+def apply_category_label_for_vector(x):
+    open, close = x
     return apply_category_label(open, close)
 
 def get_dates(training_start, validation_start, test_start, test_end):
@@ -107,21 +120,47 @@ def get_dates(training_start, validation_start, test_start, test_end):
     while(test_start < test_end - min_spacing):
         test_start = test_start + min_spacing
         test_dates.append(test_start)
-    return training_dates, validation_dates, test_dates        
+    return training_dates, validation_dates, test_dates 
 
-#Not tested for now because is incomplete
-def create_data(dates, df_width):
+#TODO write tests
+def create_data(dates):
+    """creates the csv files for training, validation and test
+
+    Args:
+        dates (list(datetime.datetime)): the 4 dates: training_start, training_end/validation_start, validation_end/test_start, test_end
+
+    Returns:
+        [type]: [description]
+    """
+    dataframe = load_market_csv(market)
+    training_start, validation_start, test_start, test_end = dates
+    training_dates, validation_dates, test_dates = get_dates(training_start, validation_start, test_start, test_end)       
+    training_file_time = create_data_file(training_dates, dataframe, 'training')
+    validation_file_time = create_data_file(validation_dates, dataframe, 'validation')
+    test_file_time = create_data_file(test_dates, dataframe, 'test')
+    return training_file_time, validation_file_time, test_file_time
+
+#TODO write tests
+def create_data_file(dates, dataframe, filename):
+    """writes a csv file gathering OHLC data in the required format for the set of dates provided
+
+    Args:
+        dates (list[datetime.datetime]): a list of all of the dates to try and get data for
+        dataframe (pandas.DataFrame): a dataframe containing all of the market data
+        filename (str): data file name
+
+    Returns:
+        float: the time to run in seconds
+    """
     with Timer() as T:
-        dataframe = load_market_csv(market)
-        training_start, validation_start, test_start, test_end = dates
-        start_index = find_start_date_index(dataframe, start) - sum(intervals)
+        print(f'Creating file {filename}.csv')
+        start_index = find_start_date_index(dataframe, dates[0]) - sum(intervals)
         smaller_df = dataframe.iloc[start_index: start_index + df_width, :]
-        training_dates = get_dates(training_start, validation_start, test_start, test_end)[0]
         rows = []
         iteration_count = 0
-        for date in tqdm(training_dates):
+        for date in tqdm(dates):
             if iteration_count * sum(intervals) > df_width:
-                write_data_file('training', f'models/{name}/data', rows)
+                write_data_file(filename, f'models/{name}/data', rows)
                 start_index = find_start_date_index(dataframe, date)
                 end_index = int(start_index + (target_interval.total_seconds()//60)) + df_width
                 start_index -= sum(intervals)
@@ -133,13 +172,14 @@ def create_data(dates, df_width):
                 try:
                     relevant_data = create_relevant_data_row(relevant_df, date)
                     datestring = datetime.strftime(date, '%Y-%m-%d %H:%M:%S')
-                    row = np.hstack(([[datestring]], relevant_data)).flatten().astype(str)
+                    row = np.hstack(([[datestring]], relevant_data)).flatten()
                     rows.append(row)
                 except:
                     pass
             iteration_count += 1
-        write_data_file('training', f'models/{name}/data', rows)
-    print(f'Time taken: {T._context_timed}')
+        write_data_file(filename, f'models/{name}/data', rows)
+    print(f'Time taken creating {filename}.csv: {T._context_timed}')
+    return T._context_timed
 
 def get_dataframe_from_dates(start_date, end_date, dataframe):
     """Generates a subset from a dataframe between two dates. Because it compares multiple string matching values 
@@ -277,13 +317,3 @@ def create_row(input_values, outputs):
     for i in range(0, len(values[0])):
         values[0][i] = Decimal(str(start_value)) - Decimal(str(values[0][i]))
     return np.hstack((values, [outputs]))
-
-def write_data_file(rows):
-    pass
-
-# set_intervals([15,15,15,15])
-# start = datetime.strptime('2014-05-22 09:55:00', '%Y-%m-%d %H:%M:%S')
-# end = datetime.strptime('2014-06-22 12:59:00', '%Y-%m-%d %H:%M:%S')
-# dates = [start, end, end, end]
-# all_dataframes = create_data(dates, 25000)
-# print('finished')

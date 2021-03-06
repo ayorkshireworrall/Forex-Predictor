@@ -1,15 +1,25 @@
-import os
+import os, json
 import numpy as np
-import pandas as pd
 
 def write_data_file(filename, filepath, data):
     create_sub_directories(filepath)
     if not os.listdir(filepath):
         with open(f'{filepath}/{filename}.csv', 'w') as f:
-            np.savetxt(f, data, fmt="%s")
+            np.savetxt(f, data, fmt="%s", delimiter=',')
     else:
         with open(f'{filepath}/{filename}.csv', 'a') as f:
-            np.savetxt(f, data, fmt="%s")
+            np.savetxt(f, data, fmt="%s", delimiter=',')
+
+def write_meta_data_file(filepath, meta_data):
+    """writes a meta data file as json to the chosen file path
+
+    Args:
+        filepath (str): relative file path from the working directory
+        meta_data (dict): meta data
+    """
+    create_sub_directories(filepath)
+    with open(f'{filepath}/meta.json', 'w') as f:
+        f.write(json.dumps(meta_data, indent=4))
 
 def create_sub_directories(path):
     """checks and creates all non-existing sub directories of a given path
