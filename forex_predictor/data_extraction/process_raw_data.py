@@ -18,6 +18,8 @@ market = 'EUR/GBP'
 max_input_minutes_missing = 0 #allowance for missing data points from inputs
 name = 'test'
 df_width = 25000 #the size of the market data subset for batch processing
+big_gain_boundary = 0.0001
+big_loss_boundary = -0.0001
 
 #setters
 def set_intervals(interval_array):
@@ -48,6 +50,14 @@ def set_df_width(width):
     global df_width
     df_width = width
 
+def set_big_gain_boundary(boundary):
+    global big_gain_boundary
+    big_gain_boundary = boundary
+
+def set_big_loss_boundary(boundary):
+    global big_loss_boundary
+    big_loss_boundary = boundary
+
 #getters(mainly for tests)
 def get_intervals():
     global intervals
@@ -75,11 +85,25 @@ def get_df_width():
 
 #----------------------------------process raw data from csv---------------------------------------------
 
-def apply_category_label(open, close):
+def apply_category_label_binary(open, close):
+    """ 0 = loss, 1 = gain
+    """
     if close - open < 0:
         return 0
     else:
         return 1
+
+def apply_category_label_4(open, close):
+    """ 0 = 'big' loss, 1 = 'little' loss, 2 = 'little' gain, 3 = 'big' gain
+    """
+    if close - open < big_loss_boundary:
+        return 0
+    elif close - open < 0:
+        return 1
+    elif close - open > big_gain_boundary:
+        return 3
+    else:
+        return 2
 
 def load_market_csv(market):
     market = market.replace('/', '_')
@@ -88,11 +112,15 @@ def load_market_csv(market):
 def apply_category_label_for_dataframe(df):
     open = df.iloc[0]['open']
     close = df.iloc[-1]['close']
-    return apply_category_label(open, close)
+    return apply_category_label_binary(open, close)
 
-def apply_category_label_for_vector(x):
+def apply_binary_category_label_for_vector(x):
     open, close = x
-    return apply_category_label(open, close)
+    return apply_category_label_binary(open, close)
+
+def apply_4_category_label_for_vector(x):
+    open, close = x
+    return apply_category_label_4(open, close)
 
 def get_dates(training_start, validation_start, test_start, test_end):
     """get dates for the various datapoints based on global config

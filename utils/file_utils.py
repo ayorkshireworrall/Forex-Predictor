@@ -1,14 +1,14 @@
 import os, json
 import numpy as np
 
-def write_data_file(filename, filepath, data):
+def write_data_file(filename, filepath, data, header='', comments=''):
     create_sub_directories(filepath)
     if not os.listdir(filepath):
         with open(f'{filepath}/{filename}.csv', 'w') as f:
-            np.savetxt(f, data, fmt="%s", delimiter=',')
+            np.savetxt(f, data, fmt="%s", delimiter=',', header=header, comments=comments)
     else:
         with open(f'{filepath}/{filename}.csv', 'a') as f:
-            np.savetxt(f, data, fmt="%s", delimiter=',')
+            np.savetxt(f, data, fmt="%s", delimiter=',', header=header, comments=comments)
 
 def write_meta_data_file(filepath, meta_data):
     """writes a meta data file as json to the chosen file path
