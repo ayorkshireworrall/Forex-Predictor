@@ -6,9 +6,9 @@ from utils.file_utils import create_sub_directories
 from forex_predictor.data_extraction.process_raw_data import apply_binary_category_label_for_vector, apply_4_category_label_for_vector, set_big_gain_boundary, set_big_loss_boundary
 
 name = 'test4'
-big_gain_boundary = 0.0002
-big_loss_boundary = -0.0002
-binary_categories = True
+big_gain_boundary = 0.0003
+big_loss_boundary = -0.0003
+binary_categories = False
 
 if binary_categories:
     categorisation_method = apply_binary_category_label_for_vector
@@ -46,7 +46,7 @@ print(cm)
 
 if binary_categories:
     print(f'\nBinary category accuracy: {accuracy_score(y_val, y_pred)}')
-else:
+# else:
     big_sell_accuracy = (cm[3][3] + cm[2][3]) / cm.sum(axis=0)[3]
     print(f'\nBig sell accuracy: {big_sell_accuracy}')
 # # Applying k-Fold Cross Validation

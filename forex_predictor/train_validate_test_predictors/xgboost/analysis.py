@@ -4,7 +4,7 @@ from forex_predictor.train_validate_test_predictors.analysis_utils import append
 
 name = 'test4'
 
-base_data = pd.read_csv(f'models/{name}/ann/analysis/base_results.csv') 
+base_data = pd.read_csv(f'models/{name}/xgboost/analysis/base_results.csv') 
 add_columns_to_base_data(base_data)
 
 max_profit = base_data['Profit'].max()
@@ -15,6 +15,8 @@ append_moving_wealth_row(mondays, 10000)
 append_moving_wealth_row(mondays, 10000, bid_ask_spread=0.0002)
 tuesdays = filter_dataframe_by_days(base_data, [1])
 wednesdays = filter_dataframe_by_days(base_data, [2])
+append_moving_wealth_row(wednesdays, 10000)
+append_moving_wealth_row(wednesdays, 10000, bid_ask_spread=0.0002)
 thursdays = filter_dataframe_by_days(base_data, [3])
 fridays = filter_dataframe_by_days(base_data, [4])
 weekdays_1800_2200 = filter_by_hours(base_data, [18,19,20,21,22])
@@ -28,6 +30,11 @@ print_analysis(weekdays_1800_2200, 'weekdays 6pm-10pm')
 
 plt.close('all')
 plot_dataframe(mondays, 'Mondays')
+plot_dataframe(wednesdays, 'Wednesdays')
+
+
+append_moving_wealth_row(base_data, 10000)
+append_moving_wealth_row(base_data, 10000, bid_ask_spread=0.0002)
 plot_dataframe(base_data, 'All Data')
 
 plt.show()
