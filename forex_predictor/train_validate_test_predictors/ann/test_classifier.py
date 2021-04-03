@@ -30,7 +30,6 @@ training_dataset = pd.read_csv(f'models/{name}/data/test.csv')
 X_test = training_dataset.iloc[:, 1:-2].values
 y_test_outputs_dates = training_dataset.iloc[:, [0, -2, -1]].values
 y_test_outputs = y_test_outputs_dates[:, [1,2]]
-y_test = np.apply_along_axis(categorisation_method, 1, y_test_outputs)
 
 gains = np.apply_along_axis(calculate_gains, 1, y_test_outputs)
 
