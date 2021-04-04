@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 import tensorflow as tf
 from utils.file_utils import create_sub_directories
-from forex_predictor.data_extraction.process_raw_data import apply_4_category_label_for_vector_string, apply_binary_category_label_for_vector, apply_4_category_label_for_vector, apply_binary_category_label_for_vector_string, set_big_gain_boundary, set_big_loss_boundary
+from forex_predictor.data_extraction.process_raw_data import apply_4_category_label_for_vector, set_big_gain_boundary, set_big_loss_boundary
 
 def calculate_gains(x):
     open, close = x

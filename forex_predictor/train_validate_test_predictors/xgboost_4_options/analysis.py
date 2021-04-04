@@ -4,7 +4,7 @@ from forex_predictor.train_validate_test_predictors.analysis_utils import append
 
 name = 'test4'
 
-base_data = pd.read_csv(f'models/{name}/xgboost/analysis/base_results.csv') 
+base_data = pd.read_csv(f'models/{name}/xgboost_4_options/analysis/base_results.csv') 
 add_columns_to_base_data(base_data)
 
 #Create filtered dataframes

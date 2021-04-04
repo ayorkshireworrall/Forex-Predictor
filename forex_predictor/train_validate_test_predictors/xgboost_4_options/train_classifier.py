@@ -3,13 +3,12 @@ import pandas as pd
 import numpy as np
 import pickle
 from utils.file_utils import create_sub_directories
-from forex_predictor.data_extraction.process_raw_data import apply_binary_category_label_for_vector, apply_4_category_label_for_vector, set_big_gain_boundary, set_big_loss_boundary
+from forex_predictor.data_extraction.process_raw_data import apply_4_category_label_for_vector, set_big_gain_boundary, set_big_loss_boundary
 
-#Configurable variables
 name = 'test4'
 big_gain_boundary = 0.0003
 big_loss_boundary = -0.0003
-categorisation_method = apply_binary_category_label_for_vector
+categorisation_method = apply_4_category_label_for_vector
 
 
 # Importing the dataset
@@ -35,12 +34,14 @@ from xgboost import XGBClassifier
 classifier = XGBClassifier()
 classifier.fit(X_train, y_train)
 
-#Print basic evaluation metrics
 from sklearn.metrics import confusion_matrix, accuracy_score
 y_pred = classifier.predict(X_val)
 cm = confusion_matrix(y_val, y_pred)
 print(cm)
-print(f'\nBinary category accuracy: {accuracy_score(y_val, y_pred)}')
+
+big_sell_accuracy = (cm[3][3] + cm[2][3]) / cm.sum(axis=0)[3]
+print(f'\nBig sell accuracy: {big_sell_accuracy}')
+
 # # Applying k-Fold Cross Validation
 # from sklearn.model_selection import cross_val_score
 # accuracies = cross_val_score(estimator = classifier, X = X_train, y = y_train, cv = 10)
@@ -48,7 +49,7 @@ print(f'\nBinary category accuracy: {accuracy_score(y_val, y_pred)}')
 # print("Standard Deviation: {:.2f} %".format(accuracies.std()*100))
 
 #Save model
-path = f'models/{name}/xgboost/pickle/binary'
+path = f'models/{name}/xgboost_4_options/pickle'
 create_sub_directories(path)
 with open(f'{path}/classifier.pk', 'wb') as f:
     pickle.dump(classifier, f)
