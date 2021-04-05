@@ -23,7 +23,7 @@ sell_pred = y_pred < 0.45
 #Save predictions and actual price differences for future analysis
 def calculate_change(x):
     open, close = x
-    return open - close
+    return close - open
 actual_price_change = np.apply_along_axis(calculate_change, 1, y_test_outputs)
 results_array = np.hstack((y_test_outputs_dates, np.transpose([actual_price_change]), buy_pred, sell_pred))
 results_array = np.vstack((['Datetime', 'Open', 'Close', 'Difference', 'Buy', 'Sell'], results_array))
